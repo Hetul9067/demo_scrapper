@@ -4,6 +4,14 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from flask import make_response
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+import time
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import csv
 
 class building_data_model():
 
@@ -31,10 +39,15 @@ class building_data_model():
 
     def request(self, x):
         baseurl = f'https://duproprio.com/en/search/list?search=true&parent=1&pageNumber=1&sort=-published_at'
+        self.baseur = baseurl
         r = requests.get(baseurl, headers = self.headers)
         soup = BeautifulSoup(r.content, features = 'html.parser')
         return soup.find_all('li', class_='search-results-listings-list__item')
     
+    # def extract_image_url_from_html(self.html):
+
+
+
     def parser(self, listings) : 
         propertylinks = []
         properties = []
@@ -67,7 +80,105 @@ class building_data_model():
             style = soup.find('p', class_='listing-location__title').text.strip()[:-9]
             location_code = soup.find('h2', class_='listing-location__code')
             building_dimensions = ''
+            external_facing = soup.find('img', class_='photo-viewer__image')
+            srcset=''
             
+            
+            #set up selenium webdriver
+            chrome_option = Options()
+            chrome_option.add_argument("--headless")
+
+            service = Service("D:\HETUL\paul tech\chromedriver-win64\chromedriver-win64\chromedriver.exe")
+            driver = webdriver.Chrome(service = service, options=chrome_option)
+            driver.get(link)
+            # html=driver.page_source
+          
+            # onetrust-accept-btn-handler
+            # WebDriverWait(driver, 10).until(
+            #     EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, 'iframe'))
+            # )
+            html = driver.page_source
+            sou = BeautifulSoup(html, 'html.parser')
+
+            image_ele = sou.find('img', class_='photo-viewer__image')
+            print("image is here")
+            print(image_ele)
+            img_ur = ''
+            if image_ele:
+                src = image_ele.get('data-lazy') 
+                if src :
+                    print(f"image url : {src}")
+                    property_details['external_facing'] = src
+                else :
+                    print("image url not found")
+            else :
+                print("image element not found.")
+
+            # if srcset :
+            
+            #     srcset_urls = srcset.split(',')
+            #     for url in srcset_urls:
+            #         url = url.strip()
+            #         print(url)
+            #         if url.endswith('600w'):
+            #             print("600w inside: "+url)
+            #             property_details['external_facing'] = url.split(' ')[0]
+            #             break
+
+            property_details['external_facing'] = property_details.get('external_facing', '')
+    
+#             try :
+               
+
+#                 cookie_button = WebDriverWait(driver,30).until(
+#                     EC.element_to_be_clickable((By.CSS_SELECTOR, '#onetrust-accept-btn-handler'))
+# # onetrust-accept-btn-handler
+#                 )
+#                 cookie_button.click()
+#                 print("Cookie consent button clicked.")
+#                 # driver.switch_to.default_content()
+            
+#             except Exception as e:
+#                 print(f"Cookie consent button not found or not clickable: {e}")
+
+#             try :
+
+#                 # driver.get(link)
+#                 # time.sleep(5)
+#                 image_element = WebDriverWait(driver, 30).until(
+#                     EC.presence_of_element_located((By.CSS_SELECTOR, '#react-component-PhotoViewer'))
+# # photo-viewer__image
+#                 )
+#                 print("image element "+image_element)
+
+#                 #fetch the 'srcset attribute
+#                 # src = image_element.get_attribute('src')
+#                 # print("src:", src)
+#             except Exception as e:
+#                 print(f"An error occured: {e}")
+
+#             finally:
+               
+#                 # print("html : "+html)
+#                 # with open('output.csv', mode='w', newline='', encoding='utf-8') as file:
+#                 #     writer = csv.writer(file)
+#                 #     writer.writerow(['HTML Content'])
+#                 #     writer.writerow([html])
+
+#                 print("HTML content written to output.csv")
+#                 driver.quit()  
+#             # print("src is here : " + src)
+#             # property_details['external_facing'] = src  
+
+#             # try:
+#             #     image_element = driver.find_element(By.CSS_SELECTOR, '#react-component-PhotoViewer')
+#             #     property_details['external_facing'] = image_element.get_attribute('srcset')
+#             # except Exception as e:
+#             #     print(f"Could not find image for : {str(e)}")
+#             #     property_details['external_facing'] = None
+            
+#             print("check over here")
+           
             if location_code : 
                 location_code = location_code.text.strip()
             # print(style)
@@ -149,6 +260,7 @@ class building_data_model():
             # print(property_details)
             properties.append(property_details)
             print(property_details['selling_price'], property_details['year_of_construction'])
+            
         return properties    
 
     def scrape_data_model(self):
@@ -165,7 +277,7 @@ class building_data_model():
         for data in properties :
             sql_query = (
                 f"INSERT INTO properties(lot_dimensions, bedrooms, bathrooms, levels, living_space_area, "
-                f"selling_price, year_of_construction, style, building_dimensions, location_code) VALUES ("
+                f"selling_price, year_of_construction, style, building_dimensions, location_code, external_facing) VALUES ("
                 f"'{data['Lot Dimensions']}',"
                 f"'{data['Bedrooms']}',"
                 f"'{data['Bathrooms']}',"
@@ -175,8 +287,10 @@ class building_data_model():
                 f"{data['year_of_construction']},"
                 f"'{data['style']}',"
                 f"'{data['building_dimensions']}',"
-                f"'{data['location_code']}')"
+                f"'{data['location_code']}',"
+                f"'{data['external_facing']}')"
             )
+
 
             self.cur.execute(sql_query)
             print(x)
